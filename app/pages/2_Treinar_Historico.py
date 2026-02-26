@@ -6,9 +6,9 @@ from pathlib import Path
 import pandas as pd
 import datetime as dt
 
-from app.utils.strings import normalize_text
-from app.db.repositories.history_repo import bulk_upsert_history
-from app.utils.ui import render_sidebar_branding
+from utils.strings import normalize_text
+from db.repositories.history_repo import bulk_upsert_history
+from utils.ui import render_sidebar_branding
 
 render_sidebar_branding()
 

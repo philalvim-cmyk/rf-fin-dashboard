@@ -3,8 +3,8 @@ import pandas as pd
 from pathlib import Path
 import datetime as dt
 
-from app.utils.strings import normalize_text
-from app.db.repositories.history_repo import bulk_upsert_history
+from utils.strings import normalize_text
+from db.repositories.history_repo import bulk_upsert_history
 
 st.set_page_config(page_title="Resolver Exceções (Lote)", layout="wide")
 st.title("Resolver Exceções (Lote) — classificar tudo e salvar uma vez")

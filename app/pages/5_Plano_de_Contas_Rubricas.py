@@ -2,12 +2,12 @@ import streamlit as st
 
 st.set_page_config(page_title="Plano de Contas — Rubricas", layout="wide")
 
-from app.utils.ui import render_sidebar_branding
+from utils.ui import render_sidebar_branding
 render_sidebar_branding()
 
 import pandas as pd
 
-from app.db.repositories.rubricas_repo import (
+from db.repositories.rubricas_repo import (
     ensure_rubricas_schema,
     list_rubricas,
     upsert_rubrica,

@@ -1,6 +1,6 @@
 # app/services/transform.py
 import pandas as pd
-from app.utils.strings import normalize_text
+from utils.strings import normalize_text
 
 def add_competencia(df: pd.DataFrame, competencia_field: str = "DATA_EMISSAO") -> pd.DataFrame:
     df = df.copy()

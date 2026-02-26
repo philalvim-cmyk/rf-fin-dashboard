@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Resolver Exceções (Menu)", layout="wide")
 
-from app.utils.ui import render_sidebar_branding
+from utils.ui import render_sidebar_branding
 render_sidebar_branding()
 
 import pandas as pd
@@ -10,14 +10,14 @@ from pathlib import Path
 import datetime as dt
 import time
 
-from app.utils.strings import normalize_text
-from app.db.repositories.history_repo import bulk_upsert_history
-from app.db.repositories.rubricas_repo import list_rubricas, ensure_rubricas_schema
+from utils.strings import normalize_text
+from db.repositories.history_repo import bulk_upsert_history
+from db.repositories.rubricas_repo import list_rubricas, ensure_rubricas_schema
 
-from app.services.classify import apply_classification
-from app.services.aggregate import consolidate_dinamica
-from app.services.export import export_excel
-from app.services.transform import normalize_keys, add_competencia
+from services.classify import apply_classification
+from services.aggregate import consolidate_dinamica
+from services.export import export_excel
+from services.transform import normalize_keys, add_competencia
 
 from openpyxl import load_workbook
 

@@ -2,20 +2,20 @@ import streamlit as st
 
 st.set_page_config(page_title="Aplicar Histórico", layout="wide")
 
-from app.utils.ui import render_sidebar_branding
+from utils.ui import render_sidebar_branding
 render_sidebar_branding()
 
 import pandas as pd
 from pathlib import Path
 import time
 
-from app.config.constants import SHEET_DEFAULT, COLUMNS
-from app.services.ingest import stream_filter_by_competencia
-from app.services.transform import add_competencia, normalize_keys
-from app.services.classify import apply_classification
-from app.services.aggregate import consolidate_dinamica
-from app.services.export import export_excel
-from app.utils.hashing import sha256_bytes
+from config.constants import SHEET_DEFAULT, COLUMNS
+from services.ingest import stream_filter_by_competencia
+from services.transform import add_competencia, normalize_keys
+from services.classify import apply_classification
+from services.aggregate import consolidate_dinamica
+from services.export import export_excel
+from utils.hashing import sha256_bytes
 
 st.title("Aplicar Histórico → Classificar mês e gerar DINÂMICA")
 
