@@ -31,10 +31,10 @@ render_sidebar_branding()
 # =====================================================
 # HOME
 # =====================================================
-st.header("RF Technology - 🎯SNIPER🎯")
+st.header("RF - SNIPER")
 st.caption("Fluxo recomendado do fechamento mensal:")
 
-st.subheader("""♟️INSTRUÇÕES:
+st.subheader("""INSTRUÇÕES:
 1. **Plano de Contas (Rubricas)** → cadastre o PLANO DE CONTAS oficial da RF Consultores.
 2. **Aplicar Histórico** → processe o mês (ex.: View 01-2026) e gere o export.
 3. **Resolver Exceções (Menu)** → selecione as rubricas no dropdown e salve o lote.
