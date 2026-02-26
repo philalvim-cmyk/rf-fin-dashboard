@@ -1,4 +1,4 @@
-# Arquivos grandes
+# Arquivos grandes / dados
 *.xlsx
 *.xls
 *.csv
@@ -16,11 +16,27 @@ __pycache__/
 *$py.class
 *.so
 
+# Banco de dados local (não persistente no Cloud)
+*.sqlite
+*.db
+
 # IDE
 .vscode/
 .idea/
 
-# Sistema operacional
+# Sistema operacional / ambiente
 .DS_Store
 Thumbs.db
 .env
+
+# Diretórios legados que não devem subir
+app/pages/
+app/assets/
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Banco local
+*.sqlite
+*.db

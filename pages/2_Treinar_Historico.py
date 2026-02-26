@@ -1,6 +1,12 @@
 import streamlit as st
 
-st.title("Treinar Histórico")
+from app.utils.ui import render_page_logo
+render_page_logo()
+
+from app.utils.auth import require_login
+require_login()  # 🔐 BLOQUEIA ACESSO DIRETO
+
+st.header("Treinar Histórico")
 
 from pathlib import Path
 import pandas as pd

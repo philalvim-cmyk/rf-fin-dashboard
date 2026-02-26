@@ -2,6 +2,15 @@
 from pathlib import Path
 import streamlit as st
 
+def render_page_logo():
+    logo = Path("assets/LOGO_TDC.png")
+    if logo.exists():
+        st.image(str(logo), width=180)
+
+
+from pathlib import Path
+import streamlit as st
+
 def render_sidebar_branding():
     # Caminho da logo
     logo_path = Path("app/assets/LOGO RF branca.png")

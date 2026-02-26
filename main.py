@@ -1,6 +1,8 @@
+
 import streamlit as st
 import pandas as pd
 
+from app.utils.auth import require_login
 from app.utils.ui import render_sidebar_branding
 
 # =====================================================
@@ -11,15 +13,25 @@ st.set_page_config(
     layout="wide",
 )
 
+require_login()
+
+from pathlib import Path
+
+LOGO_PATH = Path("assets/LOGO_TDC.png")
+
+if LOGO_PATH.exists():
+    st.image(str(LOGO_PATH), width=220)
 # =====================================================
 # SIDEBAR (BRANDING SEGURO)
 # =====================================================
 render_sidebar_branding()
 
+
+
 # =====================================================
 # HOME
 # =====================================================
-st.title("RF Technology - Financeiro")
+st.header("RF Technology - Financeiro")
 st.caption("Fluxo recomendado do fechamento mensal:")
 
 st.markdown("""

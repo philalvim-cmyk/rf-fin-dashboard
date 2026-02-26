@@ -1,6 +1,13 @@
 import streamlit as st
 
-st.title("Treinar Histórico")
+from app.utils.ui import render_page_logo
+render_page_logo()
+
+from app.utils.auth import require_login
+
+require_login()  # 🔐 BLOQUEIA ACESSO DIRETO
+
+st.header("Resolver Exceções")
 
 from app.utils.ui import render_sidebar_branding
 render_sidebar_branding()
