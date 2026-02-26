@@ -4,7 +4,7 @@ from app.utils.ui import render_page_logo
 render_page_logo()
 
 from app.utils.auth import require_login
-require_login()  # 🔐 BLOQUEIA ACESSO DIRETO
+require_login()  # 🔐 BLOQUEIA ACESSO DIRETO 
 
 st.header("Treinar Histórico")
 
@@ -18,13 +18,12 @@ from app.utils.ui import render_sidebar_branding
 
 render_sidebar_branding()
 
-st.title("Treinar Histórico — Base classificada")
+st.subheader("Base classificada")
 
-st.markdown(
+st.text(
     """
-Esta página treina o **histórico** (tabela SQLite) usando um arquivo base que já contém a
-coluna de **CLASSIFICAÇÃO RF** preenchida manualmente (ex.: base 2025).
-"""
+Esta página treina o **histórico** (tabela SQLite) usando um arquivo base que já contém
+a coluna de **CLASSIFICAÇÃO RF** preenchida manualmente (ex.: base 2025)."""
 )
 
 uploaded = st.file_uploader("Upload do Excel base classificado (ex.: 2025 classificado)", type=["xlsx"])

@@ -24,7 +24,7 @@ from app.services.aggregate import consolidate_dinamica
 from app.services.export import export_excel
 from app.utils.hashing import sha256_bytes
 
-st.title("Aplicar Histórico → Classificar mês e gerar DINÂMICA")
+st.subheader("Classificar mês e gerar 🕸️DINÂMICA🕸️")
 
 uploaded = st.file_uploader("Upload do Excel do sistema (ex.: Wiew 01-2026)", type=["xlsx"])
 if uploaded is None:

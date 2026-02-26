@@ -5,7 +5,7 @@ render_page_logo()
 
 from app.utils.auth import require_login
 require_login()  # 🔐 BLOQUEIA ACESSO DIRETO
-st.header("Plano de Contas — Rubricas")
+st.header("Plano de Contas")
 
 from app.utils.ui import render_sidebar_branding
 render_sidebar_branding()
@@ -20,7 +20,7 @@ from app.db.repositories.rubricas_repo import (
     delete_rubrica,
 )
 
-st.title("Plano de Contas — Cadastro de Rubricas")
+st.header("🗄️Cadastro")
 
 ensure_rubricas_schema()
 

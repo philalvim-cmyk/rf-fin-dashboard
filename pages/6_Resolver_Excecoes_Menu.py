@@ -72,7 +72,7 @@ def _progress(bar, status, pct: int, msg: str):
     status.info(msg)
 
 
-st.title("Resolver Exceções — selecionar rubrica no menu")
+st.subheader("Selecionar rúbrica no menu")
 
 ensure_rubricas_schema()
 rubricas = list_rubricas(only_active=True)

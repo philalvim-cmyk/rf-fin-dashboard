@@ -1,3 +1,15 @@
 #python -m streamlit run app/main.py
 #.\.venv\Scripts\python.exe -m streamlit run app/main.py (Rodar dentro do VENV.)
 #.\.venv\Scripts\python.exe -c "import xlsxwriter; print(xlsxwriter.__version__)" > verificar versão do xlsxwriter
+
+#git status
+#git rm -r --cached app/pages > REMOVER app/pages DO GIT (OBRIGATÓRIO)
+#git rm -r --cached app/utils/__pycache__/ >REMOVER CACHE PYTHON DO GIT
+#git add main.py
+#>> git add .gitignore
+#>> git add app/utils/auth.py
+#>> git add app/utils/ui.py
+#>> git add pages/
+#>> git add assets/
+#git commit -m "Finalize auth, logo, and clean project structure for Streamlit Cloud"  > Quando o status estiver limpo, execute
+#git push origin main

@@ -9,7 +9,7 @@ from app.utils.ui import render_sidebar_branding
 # CONFIGURAÇÃO GLOBAL (OBRIGATORIAMENTE PRIMEIRO)
 # =====================================================
 st.set_page_config(
-    page_title="RF Technology - Financeiro",
+    page_title="RF Technology - SNIPER",
     layout="wide",
 )
 
@@ -20,7 +20,7 @@ from pathlib import Path
 LOGO_PATH = Path("assets/LOGO_TDC.png")
 
 if LOGO_PATH.exists():
-    st.image(str(LOGO_PATH), width=220)
+    st.image(str(LOGO_PATH), width=180)
 # =====================================================
 # SIDEBAR (BRANDING SEGURO)
 # =====================================================
@@ -31,11 +31,10 @@ render_sidebar_branding()
 # =====================================================
 # HOME
 # =====================================================
-st.header("RF Technology - Financeiro")
+st.header("RF Technology - 🎯SNIPER🎯")
 st.caption("Fluxo recomendado do fechamento mensal:")
 
-st.markdown("""
-### INSTRUÇÕES RÁPIDAS:
+st.subheader("""♟️INSTRUÇÕES:
 1. **Plano de Contas (Rubricas)** → cadastre o PLANO DE CONTAS oficial da RF Consultores.
 2. **Aplicar Histórico** → processe o mês (ex.: View 01-2026) e gere o export.
 3. **Resolver Exceções (Menu)** → selecione as rubricas no dropdown e salve o lote.
