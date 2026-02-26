@@ -1,0 +1,3 @@
+#python -m streamlit run app/main.py
+#.\.venv\Scripts\python.exe -m streamlit run app/main.py (Rodar dentro do VENV.)
+#.\.venv\Scripts\python.exe -c "import xlsxwriter; print(xlsxwriter.__version__)" > verificar versão do xlsxwriter
