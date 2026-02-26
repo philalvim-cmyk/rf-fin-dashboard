@@ -1,0 +1,13 @@
+[client]
+showErrorDetails = true
+
+[server]
+headless = true
+port = 8501
+
+[theme]
+primaryColor = "#FF6B35"
+backgroundColor = "#F7F7F7"
+secondaryBackgroundColor = "#E8E8E8"
+textColor = "#262730"
+font = "sans serif"
