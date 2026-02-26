@@ -1,6 +1,6 @@
 # app/services/classify.py
 import pandas as pd
-from db.repositories.history_repo import get_best_match
+from app.db.repositories.history_repo import get_best_match
 
 def apply_classification(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()

@@ -7,8 +7,8 @@ from typing import Dict, Tuple, Optional
 
 import openpyxl
 
-from utils.strings import normalize_text
-from db.repositories.history_repo import bulk_upsert_history
+from app.utils.strings import normalize_text
+from app.db.repositories.history_repo import bulk_upsert_history
 
 
 def train_history_from_excel(

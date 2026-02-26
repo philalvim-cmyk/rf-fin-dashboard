@@ -1,7 +1,7 @@
 # app/services/ingest.py
 import pandas as pd
 import openpyxl
-from utils.dates import to_datetime, competencia_mes
+from app.utils.dates import to_datetime, competencia_mes
 
 def stream_filter_by_competencia(file_path, sheet_name: str, competencia: str, columns: list[str]) -> pd.DataFrame:
     wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
