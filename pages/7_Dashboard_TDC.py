@@ -4,19 +4,24 @@ import pandas as pd
 import datetime as dt
 from numbers import Number
 import re
+import io
+import hashlib
 from pandas.errors import OutOfBoundsDatetime
-from typing import Optional, List, Dict, Set  # compatível Python 3.8+
+
 
 # ============================================================
 # CONFIG
 # ============================================================
 EXPORTS_DIR = Path("data/exports")
-EXPORT_GLOB = "export_rf_*.xlsx"
+PROCESSED_DIR = Path("data/processed")
 
+EXPORT_GLOB = "export_rf_*.xlsx"
 SHEET_DINAMICA = "DINAMICA_CONSOLIDADO"
 SHEET_DETALHADO = "DETALHADO_CLASSIFICADO"
-
 HIST_EXPORT_2025_NAME = "export_rf_hist_2025.xlsx"
+
+TRANSFER_LABEL = "TRANSFERENCIA ENTRE CONTAS"
+
 
 # ============================================================
 # PAGE
@@ -27,17 +32,11 @@ st.caption("Modo produto: histórico ON + anti-duplicação ON (usa apenas o exp
 
 
 # ============================================================
-# HELPERS
+# HELPERS (dirs / datas / status / valores)
 # ============================================================
 def ensure_dirs():
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    Path("data/processed").mkdir(parents=True, exist_ok=True)
-
-
-def find_latest_export():
-    ensure_dirs()
-    files = sorted(EXPORTS_DIR.glob(EXPORT_GLOB), key=lambda p: p.stat().st_mtime, reverse=True)
-    return files[0] if files else None
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def list_exports():
@@ -45,10 +44,15 @@ def list_exports():
     return sorted(EXPORTS_DIR.glob(EXPORT_GLOB), key=lambda p: p.stat().st_mtime)
 
 
+def find_latest_export():
+    files = sorted(list_exports(), key=lambda p: p.stat().st_mtime, reverse=True)
+    return files[0] if files else None
+
+
 def safe_parse_timestamp(ts):
     """
-    Garante que um valor convertido para Timestamp está dentro do range suportado pelo pandas
-    (datetime64[ns] ~ 1677..2262). Fora disso, retorna NaT sem quebrar.
+    Garante Timestamp dentro do range do pandas datetime64[ns] (~1677..2262).
+    Fora disso, retorna NaT.
     """
     if ts is None or ts is pd.NaT:
         return pd.NaT
@@ -73,7 +77,7 @@ def excel_date_to_datetime(x):
     - número serial do Excel (ex.: 46044) inclusive numpy (Number)
     - string numérica "46044" ou "46044.0"
     - string de data
-    Sempre devolve Timestamp válido OU NaT (nunca estoura OutOfBounds).
+    Retorna Timestamp válido OU NaT (nunca estoura OutOfBounds).
     """
     if x is None:
         return pd.NaT
@@ -123,7 +127,6 @@ def excel_date_to_datetime(x):
             if num > 30000:
                 ts = pd.to_datetime("1899-12-30") + pd.to_timedelta(num, unit="D")
                 return safe_parse_timestamp(ts)
-            # fallback (casos raros)
             ts = pd.to_datetime(num, errors="coerce", unit="D", origin="1899-12-30")
             return safe_parse_timestamp(ts)
         except (OutOfBoundsDatetime, OverflowError, ValueError):
@@ -179,7 +182,7 @@ def effective_value(row):
 # CACHE / LOADERS
 # ============================================================
 @st.cache_data(ttl=600)
-def load_export(path, mtime):
+def load_export(path: str, mtime: float):
     """Lê as 2 abas padrão. Cacheado por (path + mtime)."""
     df_dyn = pd.read_excel(path, sheet_name=SHEET_DINAMICA, engine="openpyxl")
     df_det = pd.read_excel(path, sheet_name=SHEET_DETALHADO, engine="openpyxl")
@@ -187,7 +190,7 @@ def load_export(path, mtime):
 
 
 @st.cache_data(ttl=600)
-def read_competencias_from_export(path, mtime):
+def read_competencias_from_export(path: str, mtime: float):
     """Lê apenas DINAMICA_CONSOLIDADO para descobrir quais COMPETENCIA_MES existem no arquivo."""
     df_dyn = pd.read_excel(path, sheet_name=SHEET_DINAMICA, engine="openpyxl")
     if "COMPETENCIA_MES" not in df_dyn.columns:
@@ -231,6 +234,7 @@ def choose_latest_export_per_competencia(files):
 use_hist = st.sidebar.checkbox("📚 Usar histórico (2025+2026...)", value=True)
 use_solution_a = st.sidebar.checkbox("✅ Anti-duplicação por competência", value=True)
 
+
 # ============================================================
 # 0) EXPORTS: carregar base
 # ============================================================
@@ -240,7 +244,10 @@ if latest is None:
     st.info("Gere um export em 'Aplicar Histórico' e volte aqui.")
     st.stop()
 
-st.caption(f"📁 Último export detectado: **{latest.name}** | {dt.datetime.fromtimestamp(latest.stat().st_mtime)}")
+st.caption(
+    f"📁 Último export detectado: **{latest.name}** • "
+    f"{dt.datetime.fromtimestamp(latest.stat().st_mtime)}"
+)
 
 col_btn, col_info = st.columns([1, 3])
 with col_btn:
@@ -250,27 +257,36 @@ with col_btn:
 with col_info:
     st.write("Recarrega exports conforme histórico/anti-duplicação.")
 
+
 all_files = list_exports()
+
 if use_hist:
     files_to_load = choose_latest_export_per_competencia(all_files) if use_solution_a else all_files
 else:
     files_to_load = [latest]
 
 dyn_list, det_list = [], []
+load_errors = []
+
 for f in files_to_load:
     try:
         d_dyn, d_det = load_export(str(f), f.stat().st_mtime)
         dyn_list.append(d_dyn)
         det_list.append(d_det)
-    except Exception:
-        pass
+    except Exception as e:
+        load_errors.append((f.name, str(e)))
 
 df_dyn = pd.concat(dyn_list, ignore_index=True) if dyn_list else pd.DataFrame()
 df_det = pd.concat(det_list, ignore_index=True) if det_list else pd.DataFrame()
 
 if df_det.empty:
     st.warning("Não foi possível carregar DETALHADO_CLASSIFICADO. Verifique os exports em data/exports.")
+    if load_errors:
+        with st.expander("⚠️ Erros ao ler exports (diagnóstico)"):
+            for name, err in load_errors[:20]:
+                st.write(f"- {name}: {err}")
     st.stop()
+
 
 # ============================================================
 # 1) Preparação do DETALHADO
@@ -287,7 +303,10 @@ df["VALOR_EFETIVO"] = df.apply(effective_value, axis=1)
 if "COMPETENCIA_MES" in df.columns:
     df["COMPETENCIA_MES"] = df["COMPETENCIA_MES"].astype(str).str.strip()
 
-df["IS_TRANSFERENCIA"] = df.get("CLASSIFICACAO_RF", "").astype(str).str.upper().eq("TRANSFERENCIA ENTRE CONTAS")
+df["IS_TRANSFERENCIA"] = (
+    df.get("CLASSIFICACAO_RF", "").astype(str).str.upper().eq(TRANSFER_LABEL)
+)
+
 
 # ============================================================
 # 2) Sidebar filtros
@@ -295,58 +314,103 @@ df["IS_TRANSFERENCIA"] = df.get("CLASSIFICACAO_RF", "").astype(str).str.upper().
 with st.sidebar:
     st.header("Filtros do Dashboard")
 
-    comp_list = sorted([c for c in df["COMPETENCIA_MES"].dropna().unique() if c and c.lower() != "nan"])
-    anos = sorted({c[:4] for c in comp_list if len(c) >= 7})
+    if "COMPETENCIA_MES" in df.columns:
+        comp_list = sorted([c for c in df["COMPETENCIA_MES"].dropna().unique() if c and str(c).lower() != "nan"])
+    else:
+        comp_list = []
+
+    anos = sorted({str(c)[:4] for c in comp_list if len(str(c)) >= 7})
     meses = [f"{m:02d}" for m in range(1, 13)]
 
     ano_sel = st.multiselect("Ano", anos, default=anos)
     mes_sel = st.multiselect("Mês", meses, default=[])
 
-    tipo_sel = st.multiselect("Tipo (PAGAR/RECEBER)", sorted(df["TIPO"].dropna().astype(str).unique().tolist()), default=[])
-    status_sel = st.multiselect("Situação", sorted(df["STATUS_NORM"].dropna().unique().tolist()), default=[])
-
-    cnpj_sel = st.multiselect("CNPJ Empresa", sorted(df["CNPJ_EMPRESA"].dropna().astype(str).unique().tolist()), default=[])
-    cc_sel = st.multiselect("Centro de custo", sorted(df["NOME_CENTRO_CUSTO"].dropna().astype(str).unique().tolist()), default=[])
-
-    rub_sel = st.multiselect("Rubrica (CLASSIFICAÇÃO RF)", sorted(df["CLASSIFICACAO_RF"].dropna().astype(str).unique().tolist()), default=[])
-    pessoa_sel = st.multiselect("Pessoa (cliente/fornecedor)", sorted(df["NOME_PESSOA"].dropna().astype(str).unique().tolist()), default=[])
-
-    banco_sel = st.multiselect("Banco/Portador", sorted(df["NOME_PORTADOR"].dropna().astype(str).unique().tolist()), default=[])
-    forma_sel = st.multiselect("Forma de pagamento", sorted(df["FORMA_PAGAMENTO"].dropna().astype(str).unique().tolist()), default=[])
+    tipo_sel = st.multiselect(
+        "Tipo (PAGAR/RECEBER)",
+        sorted(df.get("TIPO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    status_sel = st.multiselect(
+        "Situação",
+        sorted(df.get("STATUS_NORM", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    cnpj_sel = st.multiselect(
+        "CNPJ Empresa",
+        sorted(df.get("CNPJ_EMPRESA", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    cc_sel = st.multiselect(
+        "Centro de custo",
+        sorted(df.get("NOME_CENTRO_CUSTO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    rub_sel = st.multiselect(
+        "Rubrica (CLASSIFICAÇÃO RF)",
+        sorted(df.get("CLASSIFICACAO_RF", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    pessoa_sel = st.multiselect(
+        "Pessoa (cliente/fornecedor)",
+        sorted(df.get("NOME_PESSOA", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    banco_sel = st.multiselect(
+        "Banco/Portador",
+        sorted(df.get("NOME_PORTADOR", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
+    forma_sel = st.multiselect(
+        "Forma de pagamento",
+        sorted(df.get("FORMA_PAGAMENTO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
+        default=[],
+    )
 
     st.divider()
     st.caption("Transferências são KPI próprio e entram no histórico sem duplicar por competência.")
+
 
 # ============================================================
 # 3) Aplicar filtros
 # ============================================================
 df_f = df.copy()
-if ano_sel:
-    df_f = df_f[df_f["COMPETENCIA_MES"].str[:4].isin(ano_sel)]
-if mes_sel:
-    df_f = df_f[df_f["COMPETENCIA_MES"].str[5:7].isin(mes_sel)]
-if tipo_sel:
+
+if ano_sel and "COMPETENCIA_MES" in df_f.columns:
+    df_f = df_f[df_f["COMPETENCIA_MES"].astype(str).str[:4].isin(ano_sel)]
+
+if mes_sel and "COMPETENCIA_MES" in df_f.columns:
+    df_f = df_f[df_f["COMPETENCIA_MES"].astype(str).str[5:7].isin(mes_sel)]
+
+if tipo_sel and "TIPO" in df_f.columns:
     df_f = df_f[df_f["TIPO"].astype(str).isin(tipo_sel)]
-if status_sel:
-    df_f = df_f[df_f["STATUS_NORM"].isin(status_sel)]
-if cnpj_sel:
+
+if status_sel and "STATUS_NORM" in df_f.columns:
+    df_f = df_f[df_f["STATUS_NORM"].astype(str).isin(status_sel)]
+
+if cnpj_sel and "CNPJ_EMPRESA" in df_f.columns:
     df_f = df_f[df_f["CNPJ_EMPRESA"].astype(str).isin(cnpj_sel)]
-if cc_sel:
+
+if cc_sel and "NOME_CENTRO_CUSTO" in df_f.columns:
     df_f = df_f[df_f["NOME_CENTRO_CUSTO"].astype(str).isin(cc_sel)]
-if rub_sel:
+
+if rub_sel and "CLASSIFICACAO_RF" in df_f.columns:
     df_f = df_f[df_f["CLASSIFICACAO_RF"].astype(str).isin(rub_sel)]
-if pessoa_sel:
+
+if pessoa_sel and "NOME_PESSOA" in df_f.columns:
     df_f = df_f[df_f["NOME_PESSOA"].astype(str).isin(pessoa_sel)]
-if banco_sel:
+
+if banco_sel and "NOME_PORTADOR" in df_f.columns:
     df_f = df_f[df_f["NOME_PORTADOR"].astype(str).isin(banco_sel)]
-if forma_sel:
+
+if forma_sel and "FORMA_PAGAMENTO" in df_f.columns:
     df_f = df_f[df_f["FORMA_PAGAMENTO"].astype(str).isin(forma_sel)]
+
 
 # ============================================================
 # 4) KPIs
 # ============================================================
-df_receber = df_f[df_f["TIPO"].astype(str).str.upper() == "RECEBER"]
-df_pagar = df_f[df_f["TIPO"].astype(str).str.upper() == "PAGAR"]
+df_receber = df_f[df_f.get("TIPO", "").astype(str).str.upper() == "RECEBER"]
+df_pagar = df_f[df_f.get("TIPO", "").astype(str).str.upper() == "PAGAR"]
 
 rec_quitado = df_receber[df_receber["STATUS_NORM"] == "QUITADO"]
 pag_quitado = df_pagar[df_pagar["STATUS_NORM"] == "QUITADO"]
@@ -359,7 +423,7 @@ kpi_pago = pag_quitado["VALOR_EFETIVO"].sum()
 kpi_aberto_receber = rec_aberto["VALOR_EFETIVO"].sum()
 kpi_aberto_pagar = pag_aberto["VALOR_EFETIVO"].sum()
 
-def avg_days(df_in, start_col, end_col):
+def avg_days(df_in: pd.DataFrame, start_col: str, end_col: str) -> float:
     if df_in.empty or start_col not in df_in.columns or end_col not in df_in.columns:
         return 0.0
     aux = df_in[[start_col, end_col]].dropna()
@@ -395,21 +459,15 @@ c4.metric("A Pagar (Aberto)", fmt_money(kpi_aberto_pagar))
 c5.metric("Prazo médio receb.", fmt_days(pm_receb))
 c6.metric("Transferências (R$)", fmt_money(kpi_transf_total))
 
+
 # ============================================================
-# 5) IMPORTADOR 2025 (robusto)
+# 5) IMPORTADOR 2025 (robusto e "anti-piscar")
 # ============================================================
 st.divider()
 st.subheader("📥 Importar base 2025 consolidada (gera export histórico)")
-
 st.write(
     "Cria `export_rf_hist_2025.xlsx` em `data/exports/` com as duas abas padrão. "
     "Datas inválidas/futuras demais viram NaT e não quebram."
-)
-
-uploaded_2025 = st.file_uploader(
-    "Envie o Excel 2025 (base classificada com 'CLASSIFICAÇÃO RF')",
-    type=["xlsx"],
-    key="uploader_2025"
 )
 
 def detect_class_col(cols):
@@ -456,7 +514,7 @@ def normalize_competencia(v):
 
     return None
 
-def build_hist_export_from_base(base_path, sheet_name, out_path):
+def build_hist_export_from_base(base_path: str, sheet_name: str, out_path: Path):
     df_base = pd.read_excel(base_path, sheet_name=sheet_name, engine="openpyxl")
     df_base.rename(columns={c: str(c).strip() for c in df_base.columns}, inplace=True)
 
@@ -514,15 +572,48 @@ def build_hist_export_from_base(base_path, sheet_name, out_path):
 
     return out_path, len(df_hist), len(df_dyn_hist)
 
-if uploaded_2025 is not None:
-    ensure_dirs()
-    tmp_path = Path("data/processed") / f"import_2025_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    tmp_path.write_bytes(uploaded_2025.getvalue())
+# FORM para evitar reprocessamento durante upload (anti "piscar")
+with st.form("import_2025_form", clear_on_submit=False):
+    uploaded_2025 = st.file_uploader(
+        "Envie o Excel 2025 (base classificada com 'CLASSIFICAÇÃO RF')",
+        type=["xlsx"],
+        key="uploader_2025",
+    )
 
-    xls = pd.ExcelFile(tmp_path, engine="openpyxl")
-    sheet = st.selectbox("Selecione a aba do arquivo 2025", xls.sheet_names, index=0, key="sheet_2025")
+    sheet = None
+    tmp_path = None
 
-    if st.button("✅ Gerar export histórico 2025", key="btn_build_2025"):
+    if uploaded_2025 is not None:
+        ensure_dirs()
+
+        file_bytes = uploaded_2025.getvalue()
+        file_hash = hashlib.sha256(file_bytes).hexdigest()[:16]
+
+        tmp_path = PROCESSED_DIR / f"import_2025_{file_hash}.xlsx"
+
+        # grava apenas se ainda não existe
+        if not tmp_path.exists():
+            tmp_path.write_bytes(file_bytes)
+
+        # lê sheetnames com tratamento de erro
+        try:
+            xls = pd.ExcelFile(tmp_path, engine="openpyxl")
+            sheet = st.selectbox(
+                "Selecione a aba do arquivo 2025",
+                xls.sheet_names,
+                index=0,
+                key="sheet_2025",
+            )
+        except Exception as e:
+            st.error("Não consegui abrir o Excel 2025. Verifique se é um .xlsx válido e sem senha.")
+            st.exception(e)
+
+    submitted = st.form_submit_button("✅ Gerar export histórico 2025")
+
+if submitted:
+    if uploaded_2025 is None or tmp_path is None or sheet is None:
+        st.warning("Envie o arquivo 2025 e selecione a aba antes de gerar o export histórico.")
+    else:
         progress = st.progress(0, text="0% — Iniciando importação 2025...")
         log = st.empty()
         try:
@@ -541,7 +632,12 @@ if uploaded_2025 is not None:
 
             size_mb = out_path.stat().st_size / (1024 * 1024)
             progress.progress(100, text="100% — Concluído ✅")
-            log.success(f"✅ Gerado: {out_path.name} | {size_mb:.2f} MB | detalhado: {n_det} | dinâmica: {n_dyn}")
+            log.success(
+                f"✅ Gerado: {out_path.name}\n"
+                f"{size_mb:.2f} MB\n"
+                f"detalhado: {n_det}\n"
+                f"dinâmica: {n_dyn}"
+            )
 
             st.cache_data.clear()
             st.rerun()
@@ -550,6 +646,7 @@ if uploaded_2025 is not None:
             progress.progress(100, text="100% — Falhou ❌")
             st.error("Falha ao gerar o export histórico 2025. Veja detalhes abaixo.")
             st.exception(e)
+
 
 # ============================================================
 # 6) Gráficos simples (MVP)
@@ -563,6 +660,7 @@ if "COMPETENCIA_MES" in df_f.columns:
     g_tr = df_transf.groupby("COMPETENCIA_MES")["VALOR_EFETIVO"].sum().reset_index()
 
     colA, colB = st.columns(2)
+
     with colA:
         st.write("Recebido (Quitado) por mês")
         if not g_rec.empty:
@@ -584,18 +682,29 @@ if "COMPETENCIA_MES" in df_f.columns:
         st.info("Sem transferências no filtro atual.")
 
 st.write("Top 10 clientes (recebidos quitados)")
-if not rec_quitado.empty:
-    top_cli = rec_quitado.groupby("NOME_PESSOA")["VALOR_EFETIVO"].sum().sort_values(ascending=False).head(10)
+if not rec_quitado.empty and "NOME_PESSOA" in rec_quitado.columns:
+    top_cli = (
+        rec_quitado.groupby("NOME_PESSOA")["VALOR_EFETIVO"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
     st.bar_chart(top_cli)
 else:
     st.info("Sem recebidos quitados no filtro atual.")
 
 st.write("Top 10 fornecedores (pagos quitados)")
-if not pag_quitado.empty:
-    top_for = pag_quitado.groupby("NOME_PESSOA")["VALOR_EFETIVO"].sum().sort_values(ascending=False).head(10)
+if not pag_quitado.empty and "NOME_PESSOA" in pag_quitado.columns:
+    top_for = (
+        pag_quitado.groupby("NOME_PESSOA")["VALOR_EFETIVO"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
     st.bar_chart(top_for)
 else:
     st.info("Sem pagos quitados no filtro atual.")
+
 
 # ============================================================
 # 7) Tabela (auditoria)
@@ -612,18 +721,22 @@ cols_show = [
 ]
 cols_show = [c for c in cols_show if c in df_f.columns]
 
-st.dataframe(
-    df_f[cols_show].sort_values(["COMPETENCIA_MES"], ascending=False),
-    use_container_width=True,
-    hide_index=True
-)
+if cols_show:
+    st.dataframe(
+        df_f[cols_show].sort_values(["COMPETENCIA_MES"], ascending=False),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.info("Não há colunas suficientes para exibir a tabela no filtro atual.")
+
 
 # ============================================================
 # 8) Arquivos encontrados (diagnóstico)
 # ============================================================
 with st.expander("📁 Arquivos encontrados em data/exports (diagnóstico)"):
     ensure_dirs()
-    files = sorted(EXPORTS_DIR.glob("export_rf_*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True)
+    files = sorted(EXPORTS_DIR.glob(EXPORT_GLOB), key=lambda p: p.stat().st_mtime, reverse=True)
     if not files:
         st.warning("Nenhum export_rf_*.xlsx encontrado em data/exports.")
     else:
@@ -633,9 +746,10 @@ with st.expander("📁 Arquivos encontrados em data/exports (diagnóstico)"):
                 "arquivo": f.name,
                 "modificado_em": dt.datetime.fromtimestamp(f.stat().st_mtime),
                 "tamanho_mb": round(f.stat().st_size / (1024 * 1024), 2),
-                "caminho": str(f.resolve())
+                "caminho": str(f.resolve()),
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
 
 # ============================================================
 # 9) Diagnóstico opcional
@@ -645,3 +759,17 @@ with st.expander("🧪 Diagnóstico (opcional)"):
     st.write("Arquivos carregados:", [p.name for p in files_to_load])
     st.write("Linhas detalhado (concat):", len(df_det))
     st.write("Linhas após filtros:", len(df_f))
+
+    # Diagnóstico PM: quantos pares válidos existem?
+    if "DATA_EMISSAO" in rec_quitado.columns and ("DATA_CREDITO" in rec_quitado.columns or "DATA_PAGAMENTO" in rec_quitado.columns):
+        n_pairs_cred = 0
+        n_pairs_pag = 0
+        try:
+            if "DATA_CREDITO" in rec_quitado.columns:
+                n_pairs_cred = len(rec_quitado[["DATA_EMISSAO", "DATA_CREDITO"]].dropna())
+            if "DATA_PAGAMENTO" in rec_quitado.columns:
+                n_pairs_pag = len(rec_quitado[["DATA_EMISSAO", "DATA_PAGAMENTO"]].dropna())
+        except Exception:
+            pass
+        st.write("Pares válidos (EMISSAO->CREDITO):", n_pairs_cred)
+        st.write("Pares válidos (EMISSAO->PAGAMENTO):", n_pairs_pag)
